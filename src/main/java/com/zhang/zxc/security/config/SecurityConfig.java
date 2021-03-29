@@ -10,6 +10,10 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
+
+import javax.sql.DataSource;
 
 /**
  * @ClassName SecurityConfig
@@ -24,6 +28,17 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     @Autowired
     UserDetailsService userDetailsService;
 
+    @Autowired
+    private DataSource dataSource;
+
+    @Bean
+    public PersistentTokenRepository persistentTokenRepository() {
+        JdbcTokenRepositoryImpl jdbcTokenRepository = new JdbcTokenRepositoryImpl();
+        jdbcTokenRepository.setDataSource(dataSource);
+//        jdbcTokenRepository.setCreateTableOnStartup(true);
+        return jdbcTokenRepository;
+    }
+
     @Override
     protected void configure(AuthenticationManagerBuilder auth) throws Exception {
         auth.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
@@ -36,6 +51,22 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        http.formLogin().loginPage("");
+        http.exceptionHandling().accessDeniedPage("/unauth.html");
+        http.logout().logoutUrl("/logout").logoutSuccessUrl("/test/hello").permitAll();
+        http.formLogin()
+                .loginPage("/login.html")
+                .loginProcessingUrl("/user/login")
+                .defaultSuccessUrl("/success.html").permitAll()
+                .and().authorizeRequests()
+                    .antMatchers("/", "/test/hello", "/user/login").permitAll()
+//                    .antMatchers("/test/index").hasAuthority("admins")
+//                    .antMatchers("/test/index").hasAnyAuthority("admins", "manager")
+                    .antMatchers("/test/index").hasRole("sale")
+                .anyRequest().authenticated()
+                .and().rememberMe().tokenRepository(persistentTokenRepository())
+                .tokenValiditySeconds(600)
+                .userDetailsService(userDetailsService);
+//                .and().csrf().disable();
+
     }
 }
